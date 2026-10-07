@@ -1,0 +1,12 @@
+{
+  "name": "__NAME__",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude"
+  },
+  "mounts": [
+    "source=claude-config-__ACCOUNT__,target=/home/node/.claude,type=volume"
+  ],
+  "postCreateCommand": "sudo chown -R node:node /home/node/.claude && npm install -g @anthropic-ai/claude-code",
+  "remoteUser": "node"
+}

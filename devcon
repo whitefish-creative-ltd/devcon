@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# devcon — add a Claude Code dev container to a project, ready for DevPod.
+#
+#   devcon init [-a account] [folder]   write .devcontainer/devcontainer.json
+#   devcon help
+#
+# folder defaults to the current folder; account defaults to account2.
+# The Claude sign-in lives in a Docker volume named claude-config-<account>,
+# so every project that names the same account shares one login.
+#
+# Then manage the container in DevPod: Workspaces → Create Workspace →
+# pick the folder (or run: devpod up <folder> --ide none).
+
+set -euo pipefail
+
+# Follow symlinks (setup.sh links this into ~/.local/bin) to find the template.
+src="${BASH_SOURCE[0]}"
+while [[ -L "$src" ]]; do
+  dir="$(cd "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ "$src" == /* ]] || src="$dir/$src"
+done
+DC_HOME="$(cd "$(dirname "$src")" && pwd)"
+TEMPLATE="$DC_HOME/template/devcontainer.json"
+DEFAULT_ACCOUNT="account2"
+
+die()  { printf 'devcon: %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[1;34m›\033[0m %s\n' "$*"; }
+usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+cmd_init() {
+  local account="$DEFAULT_ACCOUNT"
+  while getopts ":a:" opt; do
+    case $opt in
+      a) account="$OPTARG" ;;
+      *) die "usage: devcon init [-a account] [folder]" ;;
+    esac
+  done
+  shift $((OPTIND - 1))
+  [[ "$account" =~ ^[a-zA-Z0-9_-]+$ ]] || die "account name may only use letters, digits, - and _"
+
+  local project="${1:-$PWD}"
+  [[ -d "$project" ]] || die "not a folder: $project"
+  project="$(cd "$project" && pwd -P)"
+
+  local dest="$project/.devcontainer/devcontainer.json"
+  [[ -f "$dest" ]] && die "$dest already exists — edit it directly, or delete it and re-run"
+  [[ -f "$TEMPLATE" ]] || die "template missing: $TEMPLATE"
+
+  mkdir -p "$project/.devcontainer"
+  sed -e "s/__ACCOUNT__/$account/g" -e "s/__NAME__/$(basename "$project")/g" "$TEMPLATE" > "$dest"
+  info "created $dest (Claude account: $account)"
+  if git -C "$project" rev-parse >/dev/null 2>&1; then
+    info "tip: to keep it out of git, add '.devcontainer/' to your global gitignore"
+  fi
+  info "next: in DevPod, Create Workspace from $project"
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  init) cmd_init "$@" ;;
+  help|-h|--help) usage ;;
+  *) die "unknown command '$cmd' (see: devcon help)" ;;
+esac
